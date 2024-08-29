@@ -3,18 +3,6 @@
 This program sets up newusers on a remote computer for sshkey 
 access only. If a key is provided to this program, it is used
 to populate the authorized_keys file on the remote computer.
-
-From a conceptual standpoint, we are executing these commands:
-
-username="newuser"
-pubkey="ssh-rsa AAAAB3Nza... user@hostname"
-useradd -m -s /bin/bash "$username"
-mkdir -p /home/"$username"/.ssh
-chmod 700 /home/"$username"/.ssh
-echo "$pubkey" > /home/"$username"/.ssh/authorized_keys
-chmod 600 /home/"$username"/.ssh/authorized_keys
-chown -R "$username":"$username" /home/"$username"/.ssh
-
 """
 ###
 # Credits
@@ -50,6 +38,7 @@ from   collections.abc import *
 import contextlib
 import getpass
 import logging
+import tempfile
 
 ###
 # Installed libraries like numpy, pandas, paramiko
@@ -58,7 +47,9 @@ import logging
 ###
 # From hpclib
 ###
+from   dorunrun import dorunrun
 import linuxutils
+from   sloppytree import SloppyTree
 from   urdecorators import trap
 from   urlogger import URLogger
 
@@ -71,9 +62,103 @@ from   urlogger import URLogger
 ###
 mynetid = getpass.getuser()
 logger = None
+login = None
+
+"""
+From a conceptual standpoint, we are executing these commands:
+
+echo "$pubkey" > /home/"$username"/.ssh/authorized_keys
+"""
+remote_commands = SloppyTree({
+    'default_group': "'cat /etc/default/useradd | grep GROUP'",
+    'user_add' : lambda u : f"'useradd -m -s /bin/bash {u}'",
+    'make_ssh_dir' : lambda u : f"'mkdir -p /home/{u}/.ssh && chmod 700 /home/{u}/.ssh'",
+    'keyring_perms' : lambda u : f"'chmod 600 /home/{u}/.ssh/authorized_keys && chown -R {u} /home/{u}/.ssh'"
+    })
+
+
+@trap
+def make_command(*args) -> str:
+    s = "ssh "
+    for arg in args:
+        s += str(arg) + ' '
+    return s
+
+
+@trap
+def loadgroups(user:str, groups:Iterable) -> Iterable:
+    """
+    format commands to add user to any non-default groups.
+    """ 
+    global remote_commands, login
+
+    default_group = dorunrun(make_command(login, remote_commands.default_group), 
+        return_datatype=str)
+
+    return tuple(f"'usermod -aG {group} {user}'" 
+        for group in groups 
+            if group != default_group)
+
+
+@trap
+def loadkeys(keyfiles:Iterable) -> str:
+    """
+    load zero or more files of public keys into a string
+    to be written to the destination's authorized_keys file.
+    """
+    keydata = ""
+
+    for keyfile in keyfiles:
+        with open(keyfile) as f:
+            keydata += f.read() + '\n'
+
+    f = tempfile.NamedTemporaryFile(mode='w+t')
+    f.write(keydata)
+    f.seek(0)
+
+    return f
+
 
 @trap
 def usersetup_main(myargs:argparse.Namespace) -> int:
+    """
+    Collect all the information, and issue the commands.
+    """
+    global login
+    login = f'root@{myargs.remote_host}'
+
+    userkeys = loadkeys(myargs.keyfile)
+    group_cmds = loadgroups(myargs.groups)
+    u = myargs.user
+
+    # Create the user.
+    if not (result := dorunrun(make_command(login, remote_commands.user_add(u)),
+        return_datatype=bool)):
+        logger.error(f'unable to add {u}.')
+        sys.exit(os.EX_DATAERR)
+
+    for group in group_cmds:
+        if not (result := dorunrun(make_command(login, group), return_datatype=bool)):
+            logger.error(f'unable to execute {group}')
+            sys.exit(os.EX_DATAERR)
+
+    if not (result := dorunrun(make_command(login, remote_commands.make_ssh_dir(u)),
+        return_datatype=bool)):
+        logger.error(f'cannot create .ssh dir for {u}')
+        sys.exit(os.EX_DATAERR)
+        
+    
+    if not (result := dorunrun(f'scp {login}:{userkeys.name} /home/{u}/.ssh/authorized_keys',
+        return_datatype=bool)):
+        logger.error(f'unable to create authorized_keys for {u}')
+        sys.exit(os.EX_DATAERR)
+
+    if not (result := dorunrun(make_command(login, remote_commands.keyring_perms(u)), 
+        return_datatype=bool)):
+        logger.error(f'unable to set permissions for {u}')
+        sys.exit(os.EX_DATAERR)
+    
+
     return os.EX_OK
 
 
@@ -93,9 +178,24 @@ if __name__ == '__main__':
         default=logging.DEBUG,
         help=f"Logging level, defaults to {logging.DEBUG}")
 
+    parser.add_argument('-g', '--group', action='append', 
+        help="non-default groups where the user will be a member.")
+
+    parser.add_argument('-k', '--keyfile', action='append',
+        help="One or more files containing public keys to be transferred.")
+
     parser.add_argument('-o', '--output', type=str, default="",
         help="Output file name")
+
+    parser.add_argument('-r', '--remote-host', type=str, required=True,
+        help="Remote host where the new user will be created.")
+
+    parser.add_argument('-u', '--user', type=str, required=True,
+        help="netid of the user being added.")
     
+    parser.add_argument('--uid', type=int, default=None,
+        help="Explicitly give the UID. The default is to use the user's UID on the source computer.")
+
     parser.add_argument('-z', '--zap', type='store_true', 
         help="Remove old log file and create a new one.")
 
