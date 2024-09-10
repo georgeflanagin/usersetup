@@ -69,3 +69,12 @@ In the logfile will be these facts:
 #INFO     [2024-09-10 12:32:30,883] (494249 usersetup take_action: ssh root@adam 'chmod 600 /home/gflanagi/.ssh/authorized_keys' )
 #INFO     [2024-09-10 12:32:30,883] (494249 usersetup take_action: ssh root@adam 'chown -R gflanagi /home/gflanagi/.ssh' )
 ```
+
+Some important things to note: 
+
+[1] There is no requirement to use a key that is from an existing `.ssh` directory. 
+
+[2] More than one key can be added. The program takes all the filenames alleged to 
+contain keys, concatenates them 
+into a secure temporary file, and copies the local file to `~/.ssh/authorized_keys` 
+on the remote computer. The temporary file is removed by the OS when the file is closed.
