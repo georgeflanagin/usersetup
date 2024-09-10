@@ -9,7 +9,7 @@ key. The following are constraints on being able to execute the program.
 
 ## Usage
 
-```bash
+```
 [~]: usersetup -h
 usage: usersetup [-h] [--loglevel {50,40,30,20,10}] [--dry-run]
                  [-g GROUP] [-k KEYFILE] [-o OUTPUT] -r REMOTE_HOST -u
