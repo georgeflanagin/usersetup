@@ -20,7 +20,7 @@ What usersetup does, usersetup does best.
 options:
   -h, --help            show this help message and exit
   --loglevel {50,40,30,20,10}
-                        Logging level, defaults to 10
+                        Logging level, defaults to 30
   --dry-run             Generate the commands but do not execute them.
   -g GROUP, --group GROUP
                         non-default groups where the user will be a
