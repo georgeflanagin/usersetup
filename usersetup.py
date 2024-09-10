@@ -72,12 +72,25 @@ echo "$pubkey" > /home/"$username"/.ssh/authorized_keys
 """
 remote_commands = SloppyTree({
     'default_group': " grep GROUP /etc/default/useradd ",
-    'user_add' : lambda u : f"'useradd -m -s /bin/bash {u}'",
+    'user_add' : lambda u, uid : f"'useradd -m -s {uid} /bin/bash {u}'",
     'make_ssh_dir' : lambda u : f"'mkdir -p /home/{u}/.ssh'",
     'chmod_ssh_dir' : lambda u : f"'chmod 700 /home/{u}/.ssh'",
     'keyring_perms' : lambda u : f"'chmod 600 /home/{u}/.ssh/authorized_keys'",
     'chown_keyring' : lambda u : f"'chown -R {u} /home/{u}/.ssh'"
     })
+
+@trap
+def getuid(u:str) -> str:
+
+    global logger
+
+    try:
+        result = dorunrun(f'id -u {u}', return_datatype=dict)
+        return f" -u {result['stdout'].strip()}" if result['OK'] else ""
+
+    except Exception as e:
+        logger.error(f"Unable to id {u} {e=}")
+        return ""
 
 
 @trap
@@ -85,7 +98,6 @@ def make_command(*args) -> str:
     s = "ssh "
     for arg in args:
         s += str(arg) + ' '
-    logger.debug(f"returning {s=}")
     return s
 
 
@@ -165,11 +177,14 @@ def usersetup_main(myargs:argparse.Namespace) -> int:
     logger.debug(f"{group_cmds=}")
     u = myargs.user
 
+    uid = f" -u {myargs.uid} " if myargs.uid is not None else getuid(myargs.user)
+    logger.info(f"{uid=}")
+
     # Create the user.
 
     errors = 0
 
-    errors += take_action(make_command(login, remote_commands.user_add(u)))
+    errors += take_action(make_command(login, remote_commands.user_add(u, uid)))
 
     for group in group_cmds:
         errors += take_action(make_command(login, group))
@@ -178,7 +193,10 @@ def usersetup_main(myargs:argparse.Namespace) -> int:
 
     errors += take_action(make_command(login, remote_commands.chmod_ssh_dir(u)))
     
-    errors += take_action(f'scp {login}:{userkeys.name} /home/{u}/.ssh/authorized_keys')
+    if os.path.getsize(userkeys.name):
+        errors += take_action(f'scp {userkeys.name} {login}:/home/{u}/.ssh/authorized_keys')
+    else:
+        logger.info(f"No keys found in {userkeys.name} to transfer.")
 
     errors += take_action(make_command(login, remote_commands.keyring_perms(u)))
     errors += take_action(make_command(login, remote_commands.chown_keyring(u)))
