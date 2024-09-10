@@ -93,3 +93,6 @@ on the remote computer. The temporary file is removed by the OS when the file is
 
 [4] If the user already exists on the remote host, you can still use this command to 
 transfer keys and do the remainder of the setup.
+
+[5] The program can be run anywhere on the network; i.e., the target computer where
+the user is to be created can be *this* computer. 
