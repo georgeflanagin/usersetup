@@ -41,3 +41,31 @@ options:
 ```
 
 ## Example
+
+```
+source usersetup.sh
+usersetup -u gflanagi -k /home/gflanagi/.ssh/id_rsa.pub -z -r adam.richmond.edu
+```
+
+Sourcing the `usersetup.sh` file allows you to type `usersetup` instead of 
+`python usersetup.py`. That's really all it does, along with making it more
+bash-like.
+
+The command above creates a user named `gflanagi` on the remote host `adam.richmond.edu`. 
+The user will only be added to the default group on `adam.richmond.edu`, and the key file
+to be copied is the one in `gflanagi`'s $HOME on localhost. The `uid` will be sought, and
+if found, it will be used. The logfile will be "zapped," 
+so that it will contain only results from this operation. 
+
+In the logfile will be these facts:
+
+```
+#DEBUG    [2024-09-10 12:32:30,882] (494249 usersetup usersetup_main: group_cmds=())
+#INFO     [2024-09-10 12:32:30,883] (494249 usersetup usersetup_main: uid=' -u 222222')
+#INFO     [2024-09-10 12:32:30,883] (494249 usersetup take_action: ssh root@adam 'useradd -m -s  -u 222222 /bin/bash gflanagi' )
+#INFO     [2024-09-10 12:32:30,883] (494249 usersetup take_action: ssh root@adam 'mkdir -p /home/gflanagi/.ssh' )
+#INFO     [2024-09-10 12:32:30,883] (494249 usersetup take_action: ssh root@adam 'chmod 700 /home/gflanagi/.ssh' )
+#INFO     [2024-09-10 12:32:30,883] (494249 usersetup take_action: scp /tmp/tmpaknkhe0o root@adam:/home/gflanagi/.ssh/authorized_keys)
+#INFO     [2024-09-10 12:32:30,883] (494249 usersetup take_action: ssh root@adam 'chmod 600 /home/gflanagi/.ssh/authorized_keys' )
+#INFO     [2024-09-10 12:32:30,883] (494249 usersetup take_action: ssh root@adam 'chown -R gflanagi /home/gflanagi/.ssh' )
+```
