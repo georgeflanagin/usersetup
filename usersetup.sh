@@ -1,4 +1,4 @@
 function usersetup 
 {
-    python usersetup.py --dry-run $@
+    python usersetup.py  $@
 }

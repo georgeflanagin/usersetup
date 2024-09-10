@@ -195,10 +195,10 @@ def usersetup_main(myargs:argparse.Namespace) -> int:
     
     if os.path.getsize(userkeys.name):
         errors += take_action(f'scp {userkeys.name} {login}:/home/{u}/.ssh/authorized_keys')
+        errors += take_action(make_command(login, remote_commands.keyring_perms(u)))
     else:
         logger.info(f"No keys found in {userkeys.name} to transfer.")
 
-    errors += take_action(make_command(login, remote_commands.keyring_perms(u)))
     errors += take_action(make_command(login, remote_commands.chown_keyring(u)))
 
     errors and sys.stderr.write('One or more errors occurred. Check logfile.')
@@ -219,7 +219,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--loglevel', type=int, 
         choices=range(logging.FATAL, logging.NOTSET, -10),
-        default=logging.DEBUG,
+        default=logging.INFO,
         help=f"Logging level, defaults to {logging.DEBUG}")
 
     parser.add_argument('--dry-run', action='store_true', 
