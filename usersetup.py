@@ -72,7 +72,7 @@ echo "$pubkey" > /home/"$username"/.ssh/authorized_keys
 """
 remote_commands = SloppyTree({
     'default_group': " grep GROUP /etc/default/useradd ",
-    'user_add' : lambda u, uid : f"'useradd -m -s {uid} /bin/bash {u}'",
+    'user_add' : lambda u, uid : f"'useradd -m {uid} -s /bin/bash {u}'",
     'make_ssh_dir' : lambda u : f"'mkdir -p /home/{u}/.ssh'",
     'chmod_ssh_dir' : lambda u : f"'chmod 700 /home/{u}/.ssh'",
     'keyring_perms' : lambda u : f"'chmod 600 /home/{u}/.ssh/authorized_keys'",
@@ -143,7 +143,7 @@ def loadkeys(keyfiles:Iterable) -> str:
 
 
 @trap
-def take_action(cmd:str) -> int:
+def take_action(cmd:str, allowable_exits:Iterable=set()) -> int:
     """
     a wrapper around the conditional execution, logging, and
     error handling. The purpose is just to neaten the code.
@@ -156,8 +156,9 @@ def take_action(cmd:str) -> int:
         logger.info(cmd)
         return os.EX_OK
 
-    if not (result := dorunrun(cmd, return_datatype=bool)):
-        logger.error(f"${cmd}$ failed.")
+    result = dorunrun(cmd, return_datatype=int)
+    if not result in allowable_exits:
+        logger.error(f"${cmd}$ failed because {result=}.")
     else:
         logger.info(f"${cmd}$")
     
