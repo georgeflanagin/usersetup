@@ -80,7 +80,7 @@ In the logfile will be these facts:
 #INFO     [2024-09-10 12:32:30,883] (494249 usersetup take_action: ssh root@adam 'chown -R gflanagi /home/gflanagi/.ssh' )
 ```
 
-Some important things to note: 
+## Some important things to know: 
 
 [1] There is no requirement to use a key that is from an existing `.ssh` directory. 
 
@@ -96,3 +96,7 @@ transfer keys and do the remainder of the setup.
 
 [5] The program can be run anywhere on the network; i.e., the target computer where
 the user is to be created can be *this* computer. 
+
+[6] The newly created user does not need to run `ssh-keygen` to create a private/public
+key pair. In many cases the target computer is one that is only connected *to* rather than
+a source of new connections. 
