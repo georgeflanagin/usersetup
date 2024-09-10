@@ -7,6 +7,16 @@ key. The following are constraints on being able to execute the program.
 - The file[s] containing the public keys to be installed on the remote system are on localhost, and are readable. The program will create the user even if no keys are supplied, but the new user will not be able to login until keys are provided. They can be added later on by the usual means.
 - The desired UID of the user on the remote system is [1] supplied as an argument, or [2] can be discovered with the `id` command, or [3] is irrelevant and assigned by the remote system.
 
+Why not use the usual command line tools like `ssh-copy-id` to setup the remote 
+user? From an administrative standpoint, it is tedious and error prone to login / logout,
+and ensure that the user for whom the administrator is creating the account also exists
+on localhost. The scenario for `usersetup` is closer to the informal situation:
+
+1. User `fred` wants an account on `remote`.
+2. `fred` emails his public key to the administrator.
+3. The administrator's saves `fred`'s key to a file on the administrator's own computer.
+4. The administrator uses `usersetup` without having to login to `remote`. 
+
 ## Usage
 
 ```
