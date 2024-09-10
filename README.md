@@ -11,7 +11,9 @@ key. The following are constraints on being able to execute the program.
 
 ```bash
 [~]: usersetup -h
-usage: usersetup [-h] [--loglevel {50,40,30,20,10}] [--dry-run] [-g GROUP] [-k KEYFILE] [-o OUTPUT] -r REMOTE_HOST -u USER [--uid UID] [-z]
+usage: usersetup [-h] [--loglevel {50,40,30,20,10}] [--dry-run]
+                 [-g GROUP] [-k KEYFILE] [-o OUTPUT] -r REMOTE_HOST -u
+                 USER [--uid UID] [-z]
 
 What usersetup does, usersetup does best.
 
@@ -21,15 +23,20 @@ options:
                         Logging level, defaults to 10
   --dry-run             Generate the commands but do not execute them.
   -g GROUP, --group GROUP
-                        non-default groups where the user will be a member.
+                        non-default groups where the user will be a
+                        member.
   -k KEYFILE, --keyfile KEYFILE
-                        One or more files containing public keys to be transferred.
+                        One or more files containing public keys to be
+                        transferred.
   -o OUTPUT, --output OUTPUT
                         Output file name
   -r REMOTE_HOST, --remote-host REMOTE_HOST
-                        Remote host where the new user will be created.
+                        Remote host where the new user will be
+                        created.
   -u USER, --user USER  netid of the user being added.
-  --uid UID             Explicitly give the UID. The default is to use the user's UID on the source computer if the user exists in LDAP.
+  --uid UID             Explicitly give the UID. The default is to use
+                        the user's UID on the source computer if the
+                        user exists in LDAP.
   -z, --zap             Remove old log file and create a new one.
 ```
 
