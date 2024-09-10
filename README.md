@@ -78,3 +78,8 @@ Some important things to note:
 contain keys, concatenates them 
 into a secure temporary file, and copies the local file to `~/.ssh/authorized_keys` 
 on the remote computer. The temporary file is removed by the OS when the file is closed.
+
+[3] The user need not exist on localhost.
+
+[4] If the user already exists on the remote host, you can still use this command to 
+transfer keys and do the remainder of the setup.
