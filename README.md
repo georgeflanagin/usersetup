@@ -5,7 +5,7 @@ key. The following are constraints on being able to execute the program.
 
 - The user running the program can login as `root` on the remote system. Only `root` can create users and execute the program `chown`.
 - The file[s] containing the public keys to be installed on the remote system are on localhost, and are readable. The program will create the user even if no keys are supplied, but the new user will not be able to login until keys are provided. They can be added later on by the usual means.
-- The desired UID of the user on the remote system is known, or can be discovered with the `id` command, or is supplies as an argument. 
+- The desired UID of the user on the remote system is [1] known, or [2] can be discovered with the `id` command, or [3] is supplied as an argument, or [4] is irrelevant.
 
 ## Usage
 
