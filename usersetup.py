@@ -63,6 +63,7 @@ from   urlogger import URLogger
 mynetid = getpass.getuser()
 logger = None
 login = None
+myargs = None
 
 """
 From a conceptual standpoint, we are executing these commands:
@@ -70,10 +71,12 @@ From a conceptual standpoint, we are executing these commands:
 echo "$pubkey" > /home/"$username"/.ssh/authorized_keys
 """
 remote_commands = SloppyTree({
-    'default_group': "'cat /etc/default/useradd | grep GROUP'",
+    'default_group': " grep GROUP /etc/default/useradd ",
     'user_add' : lambda u : f"'useradd -m -s /bin/bash {u}'",
-    'make_ssh_dir' : lambda u : f"'mkdir -p /home/{u}/.ssh && chmod 700 /home/{u}/.ssh'",
-    'keyring_perms' : lambda u : f"'chmod 600 /home/{u}/.ssh/authorized_keys && chown -R {u} /home/{u}/.ssh'"
+    'make_ssh_dir' : lambda u : f"'mkdir -p /home/{u}/.ssh'",
+    'chmod_ssh_dir' : lambda u : f"'chmod 700 /home/{u}/.ssh'",
+    'keyring_perms' : lambda u : f"'chmod 600 /home/{u}/.ssh/authorized_keys'",
+    'chown_keyring' : lambda u : f"'chown -R {u} /home/{u}/.ssh'"
     })
 
 
@@ -82,6 +85,7 @@ def make_command(*args) -> str:
     s = "ssh "
     for arg in args:
         s += str(arg) + ' '
+    logger.debug(f"returning {s=}")
     return s
 
 
@@ -92,8 +96,14 @@ def loadgroups(user:str, groups:Iterable) -> Iterable:
     """ 
     global remote_commands, login
 
-    default_group = dorunrun(make_command(login, remote_commands.default_group), 
-        return_datatype=str)
+    if not groups:
+        return tuple()
+
+    result = dorunrun(make_command(login, remote_commands.default_group), return_datatype=str)
+
+    # There should be only one line that matches, so we take the first
+    # line, split on =, and take whatever follows the =.
+    default_group = result.split('\n')[0].split('=')[-1].strip()
 
     return tuple(f"'usermod -aG {group} {user}'" 
         for group in groups 
@@ -108,9 +118,10 @@ def loadkeys(keyfiles:Iterable) -> str:
     """
     keydata = ""
 
-    for keyfile in keyfiles:
-        with open(keyfile) as f:
-            keydata += f.read() + '\n'
+    if keyfiles:
+        for keyfile in keyfiles:
+            with open(keyfile) as f:
+                keydata += f.read() + '\n'
 
     f = tempfile.NamedTemporaryFile(mode='w+t')
     f.write(keydata)
@@ -118,6 +129,28 @@ def loadkeys(keyfiles:Iterable) -> str:
 
     return f
 
+
+@trap
+def take_action(cmd:str) -> int:
+    """
+    a wrapper around the conditional execution, logging, and
+    error handling. The purpose is just to neaten the code.
+    """
+    global myargs, logger, login
+
+    error_msg = f"${cmd}$ failed."
+
+    if myargs.dry_run:
+        logger.info(cmd)
+        return os.EX_OK
+
+    if not (result := dorunrun(cmd, return_datatype=bool)):
+        logger.error(f"${cmd}$ failed.")
+    else:
+        logger.info(f"${cmd}$")
+    
+    return os.EX_OK if result else os.EX_DATAERR
+    
 
 @trap
 def usersetup_main(myargs:argparse.Namespace) -> int:
@@ -128,36 +161,29 @@ def usersetup_main(myargs:argparse.Namespace) -> int:
     login = f'root@{myargs.remote_host}'
 
     userkeys = loadkeys(myargs.keyfile)
-    group_cmds = loadgroups(myargs.groups)
+    group_cmds = loadgroups(myargs.user, myargs.group)
+    logger.debug(f"{group_cmds=}")
     u = myargs.user
 
     # Create the user.
-    if not (result := dorunrun(make_command(login, remote_commands.user_add(u)),
-        return_datatype=bool)):
-        logger.error(f'unable to add {u}.')
-        sys.exit(os.EX_DATAERR)
+
+    errors = 0
+
+    errors += take_action(make_command(login, remote_commands.user_add(u)))
 
     for group in group_cmds:
-        if not (result := dorunrun(make_command(login, group), return_datatype=bool)):
-            logger.error(f'unable to execute {group}')
-            sys.exit(os.EX_DATAERR)
+        errors += take_action(make_command(login, group))
 
-    if not (result := dorunrun(make_command(login, remote_commands.make_ssh_dir(u)),
-        return_datatype=bool)):
-        logger.error(f'cannot create .ssh dir for {u}')
-        sys.exit(os.EX_DATAERR)
-        
-    
-    if not (result := dorunrun(f'scp {login}:{userkeys.name} /home/{u}/.ssh/authorized_keys',
-        return_datatype=bool)):
-        logger.error(f'unable to create authorized_keys for {u}')
-        sys.exit(os.EX_DATAERR)
+    errors += take_action(make_command(login, remote_commands.make_ssh_dir(u)))
 
-    if not (result := dorunrun(make_command(login, remote_commands.keyring_perms(u)), 
-        return_datatype=bool)):
-        logger.error(f'unable to set permissions for {u}')
-        sys.exit(os.EX_DATAERR)
+    errors += take_action(make_command(login, remote_commands.chmod_ssh_dir(u)))
     
+    errors += take_action(f'scp {login}:{userkeys.name} /home/{u}/.ssh/authorized_keys')
+
+    errors += take_action(make_command(login, remote_commands.keyring_perms(u)))
+    errors += take_action(make_command(login, remote_commands.chown_keyring(u)))
+
+    errors and sys.stderr.write('One or more errors occurred. Check logfile.')
 
     return os.EX_OK
 
@@ -178,6 +204,9 @@ if __name__ == '__main__':
         default=logging.DEBUG,
         help=f"Logging level, defaults to {logging.DEBUG}")
 
+    parser.add_argument('--dry-run', action='store_true', 
+        help="Generate the commands but do not execute them.")
+
     parser.add_argument('-g', '--group', action='append', 
         help="non-default groups where the user will be a member.")
 
@@ -194,13 +223,20 @@ if __name__ == '__main__':
         help="netid of the user being added.")
     
     parser.add_argument('--uid', type=int, default=None,
-        help="Explicitly give the UID. The default is to use the user's UID on the source computer.")
+        help="Explicitly give the UID. The default is to use the user's UID on the source computer if the user exists in LDAP.")
 
-    parser.add_argument('-z', '--zap', type='store_true', 
+    parser.add_argument('-z', '--zap', action='store_true', 
         help="Remove old log file and create a new one.")
 
     myargs = parser.parse_args()
+    if myargs.zap:
+        try:
+            os.unlink(logfile)
+        except:
+            pass
+    
     logger = URLogger(logfile=logfile, level=myargs.loglevel)
+
 
     try:
         outfile = sys.stdout if not myargs.output else open(myargs.output, 'w')
