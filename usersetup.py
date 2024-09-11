@@ -72,6 +72,7 @@ echo "$pubkey" > /home/"$username"/.ssh/authorized_keys
 """
 remote_commands = SloppyTree({
     'default_group': " grep GROUP /etc/default/useradd ",
+    'min_uid' : " grep UID_MIN /etc/login.defs ",
     'user_add' : lambda u, uid : f"'useradd -m {uid} -s /bin/bash {u}'",
     'make_ssh_dir' : lambda u : f"'mkdir -p /home/{u}/.ssh'",
     'chmod_ssh_dir' : lambda u : f"'chmod 700 /home/{u}/.ssh'",
@@ -177,8 +178,18 @@ def usersetup_main(myargs:argparse.Namespace) -> int:
     logger.debug(f"{group_cmds=}")
     u = myargs.user
 
-    uid = f" -u {myargs.uid} " if myargs.uid is not None else getuid(myargs.user)
-    logger.info(f"{uid=}")
+    uid = f" -u {myargs.uid} " if myargs.uid is not None and myargs.uid > 0 else getuid(myargs.user)
+    result = make_command(login, remote_commands.min_uid)
+    try:
+        min_uid = result['stdout'].split()[-1]
+    except:
+        min_uid = 1000
+    finally:    
+        if int(min_uid) > int(uid.split()[-1]):
+            logger.error(f"Cannot create {myargs.user} with a UID of {uid}")
+            sys.exit(os.EX_DATAERR)
+
+    logger.debug(f"{uid=}")
 
     # Create the user.
 
