@@ -19,7 +19,7 @@ on localhost. The scenario for `usersetup` is closer to the informal situation:
 1. User `fred` wants an account on `remote`.
 2. `fred` emails his public key to the administrator.
 3. The administrator's saves `fred`'s key to a file on the administrator's own computer.
-4. The administrator uses `usersetup` without having to login to `remote`. 
+4. The administrator uses `usersetup` without having to interactively login to `remote`. 
 
 ## Usage
 
@@ -86,12 +86,14 @@ In the logfile will be these facts:
 
 ## Some important things to know: 
 
-[1] There is no requirement to use a key that is from an existing `.ssh` directory. 
+[1] There is no requirement to use a key that is from an existing `.ssh` directory, and 
+there is no need to give the key file[s] restricted permissions. The new `~/.ssh/authorized_keys` file will
+be given the correct permissions by the `usersetup` program.
 
 [2] More than one key can be added. The program takes all the filenames alleged to 
 contain keys, concatenates them 
 into a secure temporary file, and copies the local file to `~/.ssh/authorized_keys` 
-on the remote computer. The temporary file is removed by the OS when the file is closed.
+on the remote computer. The temporary file is removed by the OS when the file is closed. 
 
 [3] The user need not exist on localhost.
 
@@ -104,3 +106,6 @@ the user is to be created can be *this* computer.
 [6] The newly created user does not need to run `ssh-keygen` to create a private/public
 key pair. In many cases the target computer is one that is only connected *to* rather than
 a source of new connections. 
+
+[7] The program protects you from accidents. If the remote user already exists, new keys
+will be installed and new groups assigned only if the the `--force` option is used.
