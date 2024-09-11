@@ -143,7 +143,7 @@ def loadkeys(keyfiles:Iterable) -> str:
 
 
 @trap
-def take_action(cmd:str, OK:Iterable=set(0)) -> int:
+def take_action(cmd:str, OK:Iterable={0}) -> int:
     """
     a wrapper around the conditional execution, logging, and
     error handling. The purpose is just to neaten the code.
