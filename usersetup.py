@@ -143,7 +143,7 @@ def loadkeys(keyfiles:Iterable) -> str:
 
 
 @trap
-def take_action(cmd:str, allowable_exits:Iterable=set()) -> int:
+def take_action(cmd:str, OK:Iterable=set(0)) -> int:
     """
     a wrapper around the conditional execution, logging, and
     error handling. The purpose is just to neaten the code.
@@ -156,9 +156,8 @@ def take_action(cmd:str, allowable_exits:Iterable=set()) -> int:
         logger.info(cmd)
         return os.EX_OK
 
-    result = dorunrun(cmd, return_datatype=int)
-    if not result in allowable_exits:
-        logger.error(f"${cmd}$ failed because {result=}.")
+    if not (result := dorunrun(cmd, return_datatype=bool, OK=OK)):
+        logger.error(f"${cmd}$ failed.")
     else:
         logger.info(f"${cmd}$")
     
@@ -185,7 +184,7 @@ def usersetup_main(myargs:argparse.Namespace) -> int:
 
     errors = 0
 
-    errors += take_action(make_command(login, remote_commands.user_add(u, uid)))
+    errors += take_action(make_command(login, remote_commands.user_add(u, uid), OK={0,9}))
 
     for group in group_cmds:
         errors += take_action(make_command(login, group))
