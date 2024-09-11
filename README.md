@@ -37,7 +37,7 @@ options:
   -f, --force           Overwrite any existing key files if the user already exists,
                         and has them.
   -g GROUP, --group GROUP
-                        non-default groups where the user will be a member.
+                        non-default groups of which the user will also be a member.
   -k KEYFILE, --keyfile KEYFILE
                         One or more files containing public keys to be transferred.
   --loglevel {50,40,30,20,10}
