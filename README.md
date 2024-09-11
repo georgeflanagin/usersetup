@@ -6,6 +6,7 @@ key. The following are constraints on being able to execute the program.
 - The user running the program can login as `root` on the remote system. Only `root` can create users and execute the program `chown`.
 - The file[s] containing the public keys to be installed on the remote system are on localhost, and are readable. The program will create the user even if no keys are supplied, but the new user will not be able to login until keys are provided. They can be added later on by the usual means.
 - The desired UID of the user on the remote system is [1] supplied as an argument, or [2] can be discovered with the `id` command, or [3] is irrelevant and assigned by the remote system.
+- `rsync` must be available on both computers. `scp` does not allow to check if a file exists before copying, so the `rsync` process is used, instead.
 
 Why not use the usual command line tools like `ssh-copy-id` to setup the remote 
 user? From an administrative standpoint, it is tedious and error prone to login / logout,
@@ -21,33 +22,33 @@ on localhost. The scenario for `usersetup` is closer to the informal situation:
 
 ```
 [~]: usersetup -h
-usage: usersetup [-h] [--loglevel {50,40,30,20,10}] [--dry-run]
-                 [-g GROUP] [-k KEYFILE] [-o OUTPUT] -r REMOTE_HOST -u
-                 USER [--uid UID] [-z]
+usage: usersetup [-h] [--dry-run] [-f] [-g GROUP] [-k KEYFILE]
+                 [--loglevel {50,40,30,20,10}] [-o OUTPUT] -r REMOTE_HOST -u USER
+                 [--uid UID] [-z]
 
 What usersetup does, usersetup does best.
 
 options:
   -h, --help            show this help message and exit
-  --loglevel {50,40,30,20,10}
-                        Logging level, defaults to 30
   --dry-run             Generate the commands but do not execute them.
+  -f, --force           Overwrite any existing key files if the user already exists,
+                        and has them.
   -g GROUP, --group GROUP
-                        non-default groups where the user will be a
-                        member.
+                        non-default groups where the user will be a member.
   -k KEYFILE, --keyfile KEYFILE
-                        One or more files containing public keys to be
-                        transferred.
+                        One or more files containing public keys to be transferred.
+  --loglevel {50,40,30,20,10}
+                        Logging level, defaults to 20 (INFO)
   -o OUTPUT, --output OUTPUT
                         Output file name
   -r REMOTE_HOST, --remote-host REMOTE_HOST
-                        Remote host where the new user will be
-                        created.
+                        Remote host where the new user will be created.
   -u USER, --user USER  netid of the user being added.
-  --uid UID             Explicitly give the UID. The default is to use
-                        the user's UID on the source computer if the
-                        user exists in LDAP.
+  --uid UID             Explicitly give the UID. The default is to use the user's UID
+                        on the source computer if the user exists in LDAP.
   -z, --zap             Remove old log file and create a new one.
+
+
 ```
 
 ## Example

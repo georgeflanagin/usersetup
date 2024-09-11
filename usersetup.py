@@ -184,7 +184,7 @@ def usersetup_main(myargs:argparse.Namespace) -> int:
 
     errors = 0
 
-    errors += take_action(make_command(login, remote_commands.user_add(u, uid), OK={0,9}))
+    errors += take_action(make_command(login, remote_commands.user_add(u, uid)), OK={0,9})
 
     for group in group_cmds:
         errors += take_action(make_command(login, group))
@@ -194,7 +194,10 @@ def usersetup_main(myargs:argparse.Namespace) -> int:
     errors += take_action(make_command(login, remote_commands.chmod_ssh_dir(u)))
     
     if os.path.getsize(userkeys.name):
-        errors += take_action(f'scp {userkeys.name} {login}:/home/{u}/.ssh/authorized_keys')
+        errors += ( take_action(f'rsync -a {userkeys.name} {login}:/home/{u}/.ssh/authorized_keys') 
+                    if myargs.force else
+                    take_action(f'rsync -a --ignore-existing {userkeys.name} {login}:/home/{u}/.ssh/authorized_keys'))
+
         errors += take_action(make_command(login, remote_commands.keyring_perms(u)))
     else:
         logger.info(f"No keys found in {userkeys.name} to transfer.")
@@ -217,19 +220,22 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog="usersetup", 
         description="What usersetup does, usersetup does best.")
 
-    parser.add_argument('--loglevel', type=int, 
-        choices=range(logging.FATAL, logging.NOTSET, -10),
-        default=logging.INFO,
-        help=f"Logging level, defaults to {logging.DEBUG}")
-
     parser.add_argument('--dry-run', action='store_true', 
         help="Generate the commands but do not execute them.")
+
+    parser.add_argument('-f', '--force', action='store_true',
+        help="Overwrite any existing key files if the user already exists, and has them.")
 
     parser.add_argument('-g', '--group', action='append', 
         help="non-default groups where the user will be a member.")
 
     parser.add_argument('-k', '--keyfile', action='append',
         help="One or more files containing public keys to be transferred.")
+
+    parser.add_argument('--loglevel', type=int, 
+        choices=range(logging.FATAL, logging.NOTSET, -10),
+        default=logging.INFO,
+        help=f"Logging level, defaults to {logging.INFO} (INFO)")
 
     parser.add_argument('-o', '--output', type=str, default="",
         help="Output file name")
