@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-This program sets up newusers on a remote computer for sshkey 
+This program sets up newusers on a remote computer for sshkey
 access only. If a key is provided to this program, it is used
 to populate the authorized_keys file on the remote computer.
 """
@@ -23,10 +23,11 @@ from   typing import *
 ###
 # Standard imports, starting with os and sys
 ###
-min_py = (3, 11)
+min_py = (3, 8)
 import os
 import sys
 if sys.version_info < min_py:
+    print(f"You are using {sys.version_info}.")
     print(f"This program requires Python {min_py[0]}.{min_py[1]}, or higher.")
     sys.exit(os.EX_SOFTWARE)
 
@@ -49,7 +50,8 @@ import tempfile
 ###
 from   dorunrun import dorunrun
 import linuxutils
-from   sloppytree import SloppyTree
+import setutils
+import socket
 from   urdecorators import trap
 from   urlogger import URLogger
 
@@ -60,218 +62,228 @@ from   urlogger import URLogger
 ###
 # Global objects
 ###
-mynetid = getpass.getuser()
 logger = None
 login = None
 myargs = None
+group_dict = linuxutils.group_dicts()
 
 """
-From a conceptual standpoint, we are executing these commands:
-
-echo "$pubkey" > /home/"$username"/.ssh/authorized_keys
 """
-remote_commands = SloppyTree({
-    'default_group': " grep GROUP /etc/default/useradd ",
-    'min_uid' : " grep UID_MIN /etc/login.defs ",
-    'user_add' : lambda u, uid : f"'useradd -m {uid} -s /bin/bash {u}'",
-    'make_ssh_dir' : lambda u : f"'mkdir -p /home/{u}/.ssh'",
-    'chmod_ssh_dir' : lambda u : f"'chmod 700 /home/{u}/.ssh'",
-    'keyring_perms' : lambda u : f"'chmod 600 /home/{u}/.ssh/authorized_keys'",
-    'chown_keyring' : lambda u : f"'chown -R {u} /home/{u}/.ssh'"
-    })
+class SystemParams:
+    """
+    Convenient way to store the parameters for the target system
+    where we will be creating the users.
+    """
+    def __init__(self) -> None:
+        """
+        Go find the information the target system. Primarily, we
+        are interested in the default GID and the UID whose
+        value divides the priv from non-priv users.
+        """
+        self.hostname = socket.gethostname()
+
+        result = dorunrun(f"useradd -D", return_datatype=str)
+        self.default_group = int(
+            [line.split('=')[-1].strip() for line in result.split('\n') if 'GROUP' in line][0]
+            )
+
+        result = dorunrun(f"cat /etc/login.defs", return_datatype=str)
+        self.min_UID = int(
+            [line.split()[-1].strip() for line in result.split('\n') if 'UID_MIN' in line][0]
+            )
+
+S = SystemParams()
+
+class UserInfo:
+    """
+    Immutable object to collect the information that we use to construct
+    a new user on the system.
+    """
+    def __init__(self, username:str, *,
+        UID:int = -1,
+        flags:Iterable = setutils.PHI,
+        groups:Iterable = setutils.PHI,
+        keyfiles:Iterable = setutils.PHI) -> None:
+
+        """
+        Setup the object from the parameters.
+        """
+        self.username = username
+        self.flags = frozenset(flags)
+        self.groups = frozenset(groups)
+        self.keyfiles = frozenset(keyfiles)
+        self.keys = self.loadkeys(self.keyfiles)
+
+        self.UID = self.getuid(username) if 0 > UID else UID
+
+
+    def getuid(self, u:str) -> str:
+
+        try:
+            return int(dorunrun(f'id -u {u}', return_datatype=str).strip())
+
+        except Exception as e:
+            return linuxutils.next_uid()
+
+
+    def loadkeys(self, files:Iterable) -> str:
+        """
+        load zero or more files of public keys into a string
+        to be written to the destination's authorized_keys file.
+        """
+        keydata = ""
+
+        if self.keyfiles:
+            for keyfile in self.keyfiles:
+                with open(keyfile) as f:
+                    keydata += f.read() + '\n'
+
+        return keydata
+
 
 @trap
-def getuid(u:str) -> str:
-
-    global logger
-
+def touch(path:str) -> bool:
     try:
-        result = dorunrun(f'id -u {u}', return_datatype=dict)
-        return f" -u {result['stdout'].strip()}" if result['OK'] else ""
+        with open(path, 'a'):
+            os.utime(path, None)
 
-    except Exception as e:
-        logger.error(f"Unable to id {u} {e=}")
-        return ""
+        return True
 
-
-@trap
-def make_command(*args) -> str:
-    s = "ssh "
-    for arg in args:
-        s += str(arg) + ' '
-    return s
-
-
-@trap
-def loadgroups(user:str, groups:Iterable) -> Iterable:
-    """
-    format commands to add user to any non-default groups.
-    """ 
-    global remote_commands, login
-
-    if not groups:
-        return tuple()
-
-    result = dorunrun(make_command(login, remote_commands.default_group), return_datatype=str)
-
-    # There should be only one line that matches, so we take the first
-    # line, split on =, and take whatever follows the =.
-    default_group = result.split('\n')[0].split('=')[-1].strip()
-
-    return tuple(f"'usermod -aG {group} {user}'" 
-        for group in groups 
-            if group != default_group)
-
-
-@trap
-def loadkeys(keyfiles:Iterable) -> str:
-    """
-    load zero or more files of public keys into a string
-    to be written to the destination's authorized_keys file.
-    """
-    keydata = ""
-
-    if keyfiles:
-        for keyfile in keyfiles:
-            with open(keyfile) as f:
-                keydata += f.read() + '\n'
-
-    f = tempfile.NamedTemporaryFile(mode='w+t')
-    f.write(keydata)
-    f.seek(0)
-
-    return f
-
-
-@trap
-def take_action(cmd:str, OK:Iterable={0}) -> int:
-    """
-    a wrapper around the conditional execution, logging, and
-    error handling. The purpose is just to neaten the code.
-    """
-    global myargs, logger, login
-
-    error_msg = f"${cmd}$ failed."
-
-    if myargs.dry_run:
-        logger.info(cmd)
-        return os.EX_OK
-
-    if not (result := dorunrun(cmd, return_datatype=bool, OK=OK)):
-        logger.error(f"${cmd}$ failed.")
-    else:
-        logger.info(f"${cmd}$")
-    
-    return os.EX_OK if result else os.EX_DATAERR
-    
+    except:
+        return False
 
 @trap
 def usersetup_main(myargs:argparse.Namespace) -> int:
     """
     Collect all the information, and issue the commands.
     """
-    global login
-    login = f'root@{myargs.remote_host}'
+    global logger, S
+    if 'nodefaultgroup' not in myargs.flags:
+        myargs.group.append(S.default_group)
 
-    userkeys = loadkeys(myargs.keyfile)
-    group_cmds = loadgroups(myargs.user, myargs.group)
-    logger.debug(f"{group_cmds=}")
-    u = myargs.user
+    U = UserInfo(myargs.user,
+            UID=myargs.uid,
+            groups=myargs.group,
+            keyfiles=myargs.keyfile)
 
-    uid = f" -u {myargs.uid} " if myargs.uid is not None and myargs.uid > 0 else getuid(myargs.user)
-    result = make_command(login, remote_commands.min_uid)
+    # Fundamental setup first.
     try:
-        min_uid = result['stdout'].split()[-1]
-    except:
-        min_uid = 1000
-    finally:    
-        if int(min_uid) > int(uid.split()[-1]):
-            logger.error(f"Cannot create {myargs.user} with a UID of {uid}")
-            sys.exit(os.EX_DATAERR)
+        cmd = f"useradd -u {U.UID} -m -s /bin/bash {U.username}"
+        if not (OK := dorunrun(cmd, return_datatype=bool)):
+            logger.error(f"Failed. {cmd=}")
+        logger.info(f'User {U.username} created.')
 
-    logger.debug(f"{uid=}")
+        home_dir = f'/home/{U.username}'
+        ssh_dir = f'{home_dir}/.ssh'
+        scratch_dir = f'/scratch/{U.username}'
+        keys_file = f'{ssh_dir}/authorized_keys'
+        logger.info(f'set directory names for {U.username}')
 
-    # Create the user.
+        os.makedirs(ssh_dir, exist_ok=True)
+        os.makedirs(scratch_dir, exist_ok=True)
+        touch(keys_file)
+        try:
+            os.symlink(scratch_dir, f'{home_dir}/scratch')
+        except:
+            pass
+        logger.info('files and directories created.')
 
-    errors = 0
 
-    errors += take_action(make_command(login, remote_commands.user_add(u, uid)), OK={0,9})
+        os.chmod(ssh_dir, 0o700)
+        os.chmod(keys_file, 0o600)
+        os.chmod(scratch_dir, 0o2755)
+        os.chown(keys_file, U.UID, -1)
+        os.chown(scratch_dir, U.UID, -1)
+        os.chown(ssh_dir, U.UID, -1)
+        logger.info('Permissions and owners set')
 
-    for group in group_cmds:
-        errors += take_action(make_command(login, group))
 
-    errors += take_action(make_command(login, remote_commands.make_ssh_dir(u)))
+    except Exception as e:
+        logger.error(e)
+        return os.EX_DATAERR
 
-    errors += take_action(make_command(login, remote_commands.chmod_ssh_dir(u)))
-    
-    if os.path.getsize(userkeys.name):
-        errors += ( take_action(f'rsync -a {userkeys.name} {login}:/home/{u}/.ssh/authorized_keys') 
-                    if myargs.force else
-                    take_action(f'rsync -a --ignore-existing {userkeys.name} {login}:/home/{u}/.ssh/authorized_keys'))
+    # Let's take care of any additional groups.
+    try:
+        for g in U.groups:
+            cmd = f"usermod -aG {g} {U.username}"
+            if not (OK := dorunrun(cmd, return_datatype=bool)): raise Exception()
+    except Exception as e:
+        logger.error(f"Failed to add {U.username} to {g}")
 
-        errors += take_action(make_command(login, remote_commands.keyring_perms(u)))
-    else:
-        logger.info(f"No keys found in {userkeys.name} to transfer.")
 
-    errors += take_action(make_command(login, remote_commands.chown_keyring(u)))
-
-    errors and sys.stderr.write('One or more errors occurred. Check logfile.')
+    # And add keys to the keyring if there are any.
+    mode = 'w' if 'replacekeys' in U.flags else 'a'
+    if U.keys:
+        with open(keys_file, mode) as f:
+            f.write(U.keys)
 
     return os.EX_OK
 
 
 if __name__ == '__main__':
 
+    if os.getuid():
+        print("You are not root.")
+        sys.exit(os.EX_CONFIG)
+
     here       = os.getcwd()
     progname   = os.path.basename(__file__)[:-3]
     configfile = f"{here}/{progname}.toml"
     logfile    = f"{here}/{progname}.log"
     lockfile   = f"{here}/{progname}.lock"
-    
-    parser = argparse.ArgumentParser(prog="usersetup", 
+
+    parser = argparse.ArgumentParser(prog="usersetup",
         description="What usersetup does, usersetup does best.")
 
-    parser.add_argument('--dry-run', action='store_true', 
-        help="Generate the commands but do not execute them.")
+    parser.add_argument('--faculty', action='store_true',
+        help="This user is faculty.")
 
-    parser.add_argument('-f', '--force', action='store_true',
-        help="Overwrite any existing key files if the user already exists, and has them.")
-
-    parser.add_argument('-g', '--group', action='append', 
+    parser.add_argument('-g', '--group', action='append',
+        default=[],
         help="non-default groups where the user will be a member.")
 
     parser.add_argument('-k', '--keyfile', action='append',
+        default=[],
         help="One or more files containing public keys to be transferred.")
 
-    parser.add_argument('--loglevel', type=int, 
+    parser.add_argument('--loglevel', type=int,
         choices=range(logging.FATAL, logging.NOTSET, -10),
         default=logging.INFO,
         help=f"Logging level, defaults to {logging.INFO} (INFO)")
 
+    parser.add_argument('--no-default-group', action='store_true',
+        help="Do not add user to default group.")
+
     parser.add_argument('-o', '--output', type=str, default="",
         help="Output file name")
 
-    parser.add_argument('-r', '--remote-host', type=str, required=True,
-        help="Remote host where the new user will be created.")
+    parser.add_argument('--replace-keys', action='store_true',
+        help="Overwrite any existing keys in authorized_keys.")
 
     parser.add_argument('-u', '--user', type=str, required=True,
         help="netid of the user being added.")
-    
-    parser.add_argument('--uid', type=int, default=None,
+
+    parser.add_argument('--uid', type=int, default=-1,
         help="Explicitly give the UID. The default is to use the user's UID on the source computer if the user exists in LDAP.")
 
-    parser.add_argument('-z', '--zap', action='store_true', 
+    parser.add_argument('-z', '--zap', action='store_true',
         help="Remove old log file and create a new one.")
 
     myargs = parser.parse_args()
+
+    # Set the flags.
+    myargs.flags = set()
+    if myargs.no_default_group: myargs.flags.add('nodefaultgroup')
+    if myargs.replace_keys: myargs.flags.add('replacekeys')
+    if myargs.faculty: myargs.group.append('faculty')
+
     if myargs.zap:
         try:
             os.unlink(logfile)
         except:
             pass
-    
-    logger = URLogger(logfile=logfile, level=myargs.loglevel)
 
+    logger = URLogger(logfile=logfile, level=myargs.loglevel)
 
     try:
         outfile = sys.stdout if not myargs.output else open(myargs.output, 'w')
