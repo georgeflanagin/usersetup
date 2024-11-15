@@ -41,14 +41,6 @@ the administrator is creating the account is usable.  The scenario for
 
 ```
 
-## Example
-
-```
-source usersetup.sh
-usersetup -u gflanagi -k /home/gflanagi/.ssh/id_rsa.pub -z -r adam.richmond.edu
-```
-
-
 ## Some important things to know:
 
 [1] There is no requirement to use a key that is from an existing `.ssh`
