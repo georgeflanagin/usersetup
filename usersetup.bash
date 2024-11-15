@@ -1,12 +1,13 @@
 function usersetup
 {
     if [ -z "$USER_HOST" ]; then
-        echo "Setup the host using 'choosehost'"
+        echo "First .. setup the host using 'choosehost'"
         return
     fi
 
     if [ -z "$1" ]; then
         echo "Usage: usersetup {netid} [keyfile]"
+        echo "  This will setup a user on $USER_HOST"
     fi
 
     netid="$1"
@@ -29,19 +30,37 @@ function usersetup
 
     cat "$netid.sh"
 
-    echo "Copying commands to $USER_HOST"
+    echo "Copying instructions to $USER_HOST"
     scp "$netid.sh" "root@$USER_HOST:~/."
+    if [ ! $? ]; then
+        echo "Failed to copy $netid.sh to $USER_HOST"
+        return
+    fi
 
-    echo "Executing commands on $USER_HOST"
+    echo "Creating $netid on $USER_HOST"
     ssh "root@$USER_HOST" "~/$netid.sh"
+    if [ ! $? ]; then
+        echo "Failed to create $netid to $USER_HOST"
+        return
+    fi
 
     # If there is a keyfile, then move it over and append it.
     if [ ! -z "$2" ]; then
         echo "Copying $netid.key to $USER_HOST"
         scp "$2" "root@$USER_HOST:~/$netid.key"
+        if [ ! $? ]; then
+            echo "Unable to copy $2 to $USER_HOST"
+            return
+        fi
         ssh "root@$USER_HOST" "cat $netid.key >> /home/$netid/.ssh/authorized_keys"
+        if [ $? ]; then
+            echo "Login key for $netid successfully installed on $USER_HOST"
+        else
+            echo "Unable to attach key for $netid on $USER_HOST"
+        fi
+    else
+        echo "No key file. You will need to add this later."
     fi
-
 }
 
 function choosehost
