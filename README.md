@@ -6,12 +6,15 @@ execute the program.
 
 - The user running the program can login as `root` on the remote system.
     Only `root` can create users and execute the program `chown`.
-- The user running this script need not be root.
+- The user running this script need not be root where the script is run. IOW,
+    as long as `joe@localhost` can become `root@remotehost`, `joe` can run the script.
 - The file[s] containing the public keys to be installed on the remote
-    system are on localhost, and are readable. The program will create the
+    system are on localhost, and are readable. This program will create the
     user even if no keys are supplied, but the new user will not be able
     to login until keys are provided. Keys can be added later on by the
     usual means.
+- This program will happily use a file with multiple public keys, making
+    it suitable for users who have several computers from which they login.
 - The desired UID of the user on the remote system is [1] supplied as an
     argument, or [2] can be discovered with the `id` command, or [3] is
     irrelevant and assigned by the remote system.
