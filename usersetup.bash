@@ -8,6 +8,7 @@ function usersetup
     if [ -z "$1" ]; then
         echo "Usage: usersetup {netid} [keyfile]"
         echo "  This will setup a user on $USER_HOST"
+        return
     fi
 
     netid="$1"
@@ -55,6 +56,13 @@ function usersetup
         ssh "root@$USER_HOST" "cat $netid.key >> /home/$netid/.ssh/authorized_keys"
         if [ $? ]; then
             echo "Login key for $netid successfully installed on $USER_HOST"
+            ssh "root@$USER_HOST" "sudo -u $netid ssh-keygen -q -N '' "
+            if [ $? ]; then
+                echo "key for user $netid generated"
+                ssh "root@$USER_HOST" "sudo -u $netid cat /home/$netid/.ssh/*.pub >> /home/$netid/.ssh/authorized_keys"
+            else
+                echo "key generation for $netid failed."
+            fi
         else
             echo "Unable to attach key for $netid on $USER_HOST"
         fi
