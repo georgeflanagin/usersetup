@@ -15,9 +15,9 @@ execute the program.
     usual means.
 - This program will happily use a file with multiple public keys, making
     it suitable for users who have several computers from which they login.
-- The desired UID of the user on the remote system is [1] supplied as an
-    argument, or [2] can be discovered with the `id` command, or [3] is
-    irrelevant and assigned by the remote system.
+- The desired UID of the user on the remote system [1] can be discovered
+    with the `id` command on the computer where this program is run, or
+    [2] is irrelevant and assigned by the remote system.
 
 ## About
 
