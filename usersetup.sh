@@ -26,6 +26,18 @@ EOF
             ;;
 
     esac
+    
+    local scratchfile="/tmp/$USER_HOST.userdefaults.txt"
+
+
+    ssh "root@$USER_HOST" "useradd -D" > "$scratchfile"
+    DEFAULT_GROUP=$(cat "/tmp/$USER_HOST.userdefaults.txt" | grep "^GROUP=" | cut -d= -f2)
+    if [ $? -ne 0 ] || [ -z "$DEFAULT_GROUP" ]; then
+        echo "Cannot determine the default group on $USER_HOST"
+        exit 1
+    fi
+    echo "Default group on $USER_HOST is $DEFAULT_GROUP"
+    rm -f /tmp/$USER_HOST.userdefaults.txt
 }
 
 
@@ -143,13 +155,6 @@ EOF
 
     netid="$1"
     keyfile=${2-"$netid".keys}
-    if groupexists users; then
-        default_group=users
-    elif groupexists people; then
-        default_group=people
-    else
-        default_group=
-    fi
 
     ###
     # Explanation: if we find the user already has a known uid,
@@ -167,18 +172,18 @@ EOF
     ###
     cat<<EOF
 Parameters:
-    netid = $netid
-    keyfile = $keyfile
-    default_group = $default_group
-    uid = $uid
+    netid = "$netid"
+    keyfile = "$keyfile"
+    default_group = "$DEFAULT_GROUP"
+    uid = "$uid"
 EOF
 
     # If the user doesn't exist, then we create the user.
     echo useradd -m "$uid" -s /bin/bash "$netid" > "$netid.sh"
     chmod 700 "$netid.sh"
-    if [ ! -z "$default_group" ]; then
-        echo usermod -aG "$default_group" "$netid" >> "$netid.sh"
-        echo chown "$netid:$default_group" "/home/$netid" >> "$netid.sh"
+    if [ ! -z "$DEFAULT_GROUP" ]; then
+        echo usermod -aG "$DEFAULT_GROUP" "$netid" >> "$netid.sh"
+        echo chown "$netid:$DEFAULT_GROUP" "/home/$netid" >> "$netid.sh"
         echo chmod 2755 "/home/$netid" >> "$netid.sh"
     fi
 
