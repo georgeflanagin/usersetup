@@ -1,3 +1,7 @@
+# Get the default group from the remote machine.
+export DEFAULT_GROUP=
+
+
 function choosehost
 {
     if [ -z "$1" ]; then
