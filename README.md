@@ -41,10 +41,10 @@ Here is what happens:
 - If the UID is not given, usersetup tries to discover it. If it cannot be determined, then the remote system assigns it by whatever algorithm it uses.
 - The user on the remote system is created, a home directory is created, and the skeleton files on the remote system are used to provide `.bashrc`, `.bash_profile`, and so on.
 - Whatever group scheme is in use on the remote machine (usually UPG), the new user is added to the default group to which all users can belong.
-- The group association of the new user's $HOME is changed to the default group.
-- The permissions on the new user's $HOME are set to 2755.
-- A $HOME/.ssh directory is created.
-- Any keys supplied are copied to $HOME/.ssh/authorized_keys.
+- The group association of the new user's `$HOME` is changed to the default group.
+- The permissions on the new user's `$HOME` are set to `2755`.
+- A `$HOME/.ssh` directory is created.
+- Any keys supplied are added to `$HOME/.ssh/authorized_keys`.
 - Permissions and ownership are set appropriately.
 - An ed25519 key is created for the user on the remote machine.
 
