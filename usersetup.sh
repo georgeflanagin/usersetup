@@ -236,4 +236,7 @@ EOF
     else
         echo "No key file. You will need to add this later."
     fi
+
+    echo "Creating account for $uid on the nodes of $USER_HOST"
+    ssh root@$USER_HOST "./sync_nodes.sh"
 }
