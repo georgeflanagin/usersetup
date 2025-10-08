@@ -47,6 +47,7 @@ Here is what happens:
 - Any keys supplied are added to `$HOME/.ssh/authorized_keys`.
 - Permissions and ownership are set appropriately.
 - An ed25519 key is created for the user on the remote machine.
+- The accounts are propagated to the compute nodes.
 
 
 ## Usage
