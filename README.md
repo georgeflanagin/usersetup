@@ -8,7 +8,7 @@ execute the program.
 
 - The user running the program can login as `root` on the remote system.
     Only `root` can create users and execute the program `chown`.
-- The user running this script need not have any special righs on the system where the script is run. IOW,
+- The user running this script need not have any special rights on the system where the script is run. IOW,
     as long as `joe@localhost` can become `root@remotehost`, `joe` can run the script.
 - The file[s] containing the public keys to be installed on the remote
     system are on localhost, and are readable. This program will create the
