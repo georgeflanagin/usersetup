@@ -238,5 +238,5 @@ EOF
     fi
 
     echo "Creating account for $uid on the nodes of $USER_HOST"
-    ssh root@$USER_HOST "./sync_nodes.sh"
+    ssh zeus@$USER_HOST "./sync_nodes.sh"
 }
